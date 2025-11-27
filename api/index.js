@@ -4,7 +4,7 @@ import * as cheerio from 'cheerio';
 import FormData from 'form-data';
 import yts from 'yt-search';
 
-// Facebook Downloader (fdown)
+// ==================== Facebook Downloader ====================
 const fdown = {
   getToken: async () => {
     try {
@@ -50,7 +50,7 @@ const fdown = {
   }
 };
 
-// TikTok Downloader V1 (tikwm)
+// ==================== TikTok Downloader V1 ====================
 async function tiktokV1(query) {
   const encodedParams = new URLSearchParams();
   encodedParams.set('url', query);
@@ -66,7 +66,7 @@ async function tiktokV1(query) {
   return data;
 }
 
-// TikTok Downloader V2 (savetik)
+// ==================== TikTok Downloader V2 ====================
 async function tiktokV2(query) {
   const form = new FormData();
   form.append('q', query);
@@ -97,7 +97,7 @@ async function tiktokV2(query) {
   return { title, thumbnail, video_url, slide_images };
 }
 
-// Spotify Downloader
+// ==================== Spotify Downloader ====================
 async function spotifyDown(url) {
   const BASEURL = "https://api.fabdl.com";
   const headers = {
@@ -123,13 +123,13 @@ async function spotifyDown(url) {
   }
 }
 
-// Instagram/Threads Downloader
+// ==================== Instagram/Threads Downloader ====================
 async function threadsDownload(url) {
   const { data } = await axios.get('https://www.abella.icu/dl-threads?url=' + encodeURIComponent(url));
   return data;
 }
 
-// TikTok Image Downloader (dlpanda)
+// ==================== TikTok Image Downloader ====================
 async function tiktokImageDownload(url) {
   const mainUrl = `https://dlpanda.com/id?url=${url}&token=G7eRpMaa`;
   const backupUrl = `https://dlpanda.com/id?url=${url}&token51=G32254GLM09MN89Maa`;
@@ -167,7 +167,7 @@ async function tiktokImageDownload(url) {
   }
 }
 
-// YouTube Downloader Class
+// ==================== YouTube Downloader Class ====================
 class Youtubers {
   constructor() {
     this.hex = "C5D58EF67A7584E4A29F6C35BBC4EB12";
@@ -265,7 +265,7 @@ class Youtubers {
   }
 }
 
-// Audio Download Helper
+// ==================== Audio Download Helper ====================
 const formatAudio = ['mp3', 'm4a', 'webm', 'acc', 'flac', 'opus', 'ogg', 'wav'];
 
 const ddownr = {
@@ -305,7 +305,7 @@ const ytdlAudio = async(searchQuery) => {
   };
 };
 
-// Main Serverless Handler
+// ==================== MAIN SERVERLESS HANDLER ====================
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -316,18 +316,121 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // Parse path dari req.url
-  const path = req.url || '/';
-  console.log('Request path:', path);
-  console.log('Request method:', req.method);
+  const { url: pathname } = new URL(req.url, `http://${req.headers.host}`);
 
-  // Health Check
-  if (path === '/api/health' && req.method === 'GET') {
+  // ==================== Health Check ====================
+  if (pathname === '/api/health' && req.method === 'GET') {
     return res.status(200).json({ status: 'ok', message: 'Server is running' });
   }
 
+  // ==================== UNIVERSAL DOWNLOAD ENDPOINT ====================
+  if (pathname === '/api/index' && req.method === 'POST') {
+    try {
+      const { url, platform } = req.body;
+      
+      if (!url) {
+        return res.status(400).json({ success: false, error: 'URL is required' });
+      }
+      
+      if (!platform) {
+        return res.status(400).json({ success: false, error: 'Platform is required' });
+      }
+
+      let result;
+
+      // Route berdasarkan platform
+      switch (platform.toLowerCase()) {
+        case 'facebook':
+          result = await fdown.download(url);
+          break;
+
+        case 'tiktok':
+          result = await tiktokV1(url);
+          
+          // Fallback ke V2 jika V1 gagal
+          if (!result?.data) {
+            const v2Data = await tiktokV2(url);
+            result = { data: v2Data };
+          }
+          
+          // Cek jika ada slide images
+          if (result.data && !result.data.play && !result.data.video_url) {
+            const images = await tiktokImageDownload(url);
+            if (images.length > 0) {
+              result.data.images = images;
+            }
+          }
+          
+          result = result.data;
+          break;
+
+        case 'youtube':
+          const yt = new Youtubers();
+          const ytResult = await yt.downloadVideo(url, '720');
+          
+          if (!ytResult.status) {
+            throw new Error(ytResult.pesan || 'YouTube download failed');
+          }
+          
+          result = { 
+            type: 'video', 
+            title: ytResult.judul,
+            duration: ytResult.durasi,
+            thumbnail: ytResult.thumbnail,
+            url: ytResult.url
+          };
+          break;
+
+        case 'spotify':
+          result = await spotifyDown(url);
+          break;
+
+        case 'instagram':
+        case 'threads':
+          const threadResult = await threadsDownload(url);
+          result = threadResult.data;
+          break;
+
+        case 'videy':
+          const parsed = new URL(url);
+          const id = parsed.searchParams.get('id');
+          
+          if (!id) {
+            throw new Error('Invalid URL: missing id parameter');
+          }
+          
+          result = { 
+            videoUrl: `https://cdn.videy.co/${id}.mp4`, 
+            id 
+          };
+          break;
+
+        default:
+          return res.status(400).json({ 
+            success: false, 
+            error: `Platform "${platform}" tidak didukung. Pilih: facebook, tiktok, youtube, spotify, instagram, threads, atau videy` 
+          });
+      }
+
+      return res.status(200).json({ 
+        success: true, 
+        data: result,
+        platform: platform 
+      });
+
+    } catch (error) {
+      console.error('Download Error:', error);
+      return res.status(500).json({ 
+        success: false, 
+        error: error.message || 'Internal server error' 
+      });
+    }
+  }
+
+  // ==================== SPECIFIC ENDPOINTS (Backward Compatibility) ====================
+  
   // Facebook Download
-  if (path.includes('/api/download/facebook') && req.method === 'POST') {
+  if (pathname === '/api/download/facebook' && req.method === 'POST') {
     try {
       const { url } = req.body;
       if (!url) return res.status(400).json({ success: false, error: 'URL is required' });
@@ -340,7 +443,7 @@ export default async function handler(req, res) {
   }
 
   // TikTok Download
-  if (path.includes('/api/download/tiktok') && req.method === 'POST') {
+  if (pathname === '/api/download/tiktok' && req.method === 'POST') {
     try {
       const { url } = req.body;
       if (!url) return res.status(400).json({ success: false, error: 'URL is required' });
@@ -366,7 +469,7 @@ export default async function handler(req, res) {
   }
 
   // Spotify Download
-  if (path.includes('/api/download/spotify') && req.method === 'POST') {
+  if (pathname === '/api/download/spotify' && req.method === 'POST') {
     try {
       const { url } = req.body;
       if (!url) return res.status(400).json({ success: false, error: 'URL is required' });
@@ -378,8 +481,8 @@ export default async function handler(req, res) {
     }
   }
 
-  // Threads/Instagram Download
-  if ((path.includes('/api/download/threads') || path.includes('/api/download/instagram')) && req.method === 'POST') {
+  // Threads Download
+  if (pathname === '/api/download/threads' && req.method === 'POST') {
     try {
       const { url } = req.body;
       if (!url) return res.status(400).json({ success: false, error: 'URL is required' });
@@ -392,7 +495,7 @@ export default async function handler(req, res) {
   }
 
   // Videy Download
-  if (path.includes('/api/download/videy') && req.method === 'POST') {
+  if (pathname === '/api/download/videy' && req.method === 'POST') {
     try {
       const { url } = req.body;
       if (!url) return res.status(400).json({ success: false, error: 'URL is required' });
@@ -410,7 +513,7 @@ export default async function handler(req, res) {
   }
 
   // YouTube Download
-  if (path.includes('/api/download/youtube') && req.method === 'POST') {
+  if (pathname === '/api/download/youtube' && req.method === 'POST') {
     try {
       const { url, quality = '360', type = 'video' } = req.body;
 
@@ -433,7 +536,19 @@ export default async function handler(req, res) {
     }
   }
 
-  // 404 Not Found
-  console.log('404 - Endpoint not found:', path);
-  return res.status(404).json({ success: false, error: 'Endpoint not found' });
+  // ==================== 404 Not Found ====================
+  return res.status(404).json({ 
+    success: false, 
+    error: 'Endpoint not found',
+    availableEndpoints: [
+      'POST /api/index - Universal downloader (recommended)',
+      'POST /api/download/facebook',
+      'POST /api/download/tiktok',
+      'POST /api/download/youtube',
+      'POST /api/download/spotify',
+      'POST /api/download/threads',
+      'POST /api/download/videy',
+      'GET /api/health'
+    ]
+  });
 }
