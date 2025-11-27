@@ -1,7 +1,7 @@
 {
-  "name": "alldl-api",
+  "name": "lynn-project",
   "version": "1.0.0",
-  "type": "module",
+  "type": "module",  ⬅️ INI PENTING!
   "dependencies": {
     "axios": "^1.6.0",
     "cheerio": "^1.0.0-rc.12",
