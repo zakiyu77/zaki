@@ -316,15 +316,18 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const { url: pathname } = new URL(req.url, `http://${req.headers.host}`);
+  // Parse path dari req.url
+  const path = req.url || '/';
+  console.log('Request path:', path);
+  console.log('Request method:', req.method);
 
   // Health Check
-  if (pathname === '/api/health' && req.method === 'GET') {
+  if (path === '/api/health' && req.method === 'GET') {
     return res.status(200).json({ status: 'ok', message: 'Server is running' });
   }
 
   // Facebook Download
-  if (pathname === '/api/download/facebook' && req.method === 'POST') {
+  if (path.includes('/api/download/facebook') && req.method === 'POST') {
     try {
       const { url } = req.body;
       if (!url) return res.status(400).json({ success: false, error: 'URL is required' });
@@ -337,7 +340,7 @@ export default async function handler(req, res) {
   }
 
   // TikTok Download
-  if (pathname === '/api/download/tiktok' && req.method === 'POST') {
+  if (path.includes('/api/download/tiktok') && req.method === 'POST') {
     try {
       const { url } = req.body;
       if (!url) return res.status(400).json({ success: false, error: 'URL is required' });
@@ -363,7 +366,7 @@ export default async function handler(req, res) {
   }
 
   // Spotify Download
-  if (pathname === '/api/download/spotify' && req.method === 'POST') {
+  if (path.includes('/api/download/spotify') && req.method === 'POST') {
     try {
       const { url } = req.body;
       if (!url) return res.status(400).json({ success: false, error: 'URL is required' });
@@ -375,8 +378,8 @@ export default async function handler(req, res) {
     }
   }
 
-  // Threads Download
-  if (pathname === '/api/download/threads' && req.method === 'POST') {
+  // Threads/Instagram Download
+  if ((path.includes('/api/download/threads') || path.includes('/api/download/instagram')) && req.method === 'POST') {
     try {
       const { url } = req.body;
       if (!url) return res.status(400).json({ success: false, error: 'URL is required' });
@@ -389,7 +392,7 @@ export default async function handler(req, res) {
   }
 
   // Videy Download
-  if (pathname === '/api/download/videy' && req.method === 'POST') {
+  if (path.includes('/api/download/videy') && req.method === 'POST') {
     try {
       const { url } = req.body;
       if (!url) return res.status(400).json({ success: false, error: 'URL is required' });
@@ -407,7 +410,7 @@ export default async function handler(req, res) {
   }
 
   // YouTube Download
-  if (pathname === '/api/download/youtube' && req.method === 'POST') {
+  if (path.includes('/api/download/youtube') && req.method === 'POST') {
     try {
       const { url, quality = '360', type = 'video' } = req.body;
 
@@ -431,5 +434,6 @@ export default async function handler(req, res) {
   }
 
   // 404 Not Found
+  console.log('404 - Endpoint not found:', path);
   return res.status(404).json({ success: false, error: 'Endpoint not found' });
 }
